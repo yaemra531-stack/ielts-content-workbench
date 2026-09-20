@@ -6,3 +6,5 @@
 #library-tools{border-bottom:1px solid var(--line);padding-bottom:14px;margin-bottom:14px}#library-tools .check{font-size:12px}#library-tools .actions{gap:6px}#library-tools button{font-size:13px;padding:8px}#save-state{color:var(--main);font-size:12px}#library-status{overflow-wrap:anywhere}
 
 .resume-box{margin-top:16px}.resume-box label{font-size:13px}.resume-box textarea{min-height:76px;font-size:13px}.resume-box button{font-size:12px;margin-top:8px}.step-minimum{border-left:3px solid var(--main);padding:8px 14px;background:var(--panel);border-radius:0 8px 8px 0;margin:16px 0}.step-minimum p{margin:5px 0;font-size:14px}.step-minimum small{color:var(--sub);font-size:12px}
+
+#quick-capture{margin:12px 0}#quick-capture textarea{font-size:13px}#quick-capture label{font-size:13px}#quick-capture .actions{margin-top:8px}

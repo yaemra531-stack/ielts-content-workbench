@@ -93,6 +93,21 @@ function createNote(){
  library.notes.push(n);library.activeId=n.id;state=n;
  if(!save()){library.notes.pop();state=previous;library.activeId=previous.id;refreshLibrary();return;}render();$('#post-name').focus();$('#post-name').select();$('#library-status').textContent='已新建。旧笔记仍在上方列表中。';
 }
+function captureQuickNote(){
+ const scene=$('#quick-scene').value.trim();
+ if(!scene){$('#quick-status').textContent='先写一句具体卡点就好。';$('#quick-scene').focus();return;}
+ if(!save()){$('#quick-status').textContent='保存未成功，请保留这句话并先备份当前内容。';return;}
+ const previous=state;const n=fresh();n.id=crypto.randomUUID();n.name=Array.from(scene.replace(/\s+/g,' ')).slice(0,24).join('');n.step=4;n.values[4].scene=scene;n.working[4]=true;
+ library.notes.push(n);library.activeId=n.id;state=n;
+ if(!save()){library.notes.pop();state=previous;library.activeId=previous.id;refreshLibrary();$('#quick-status').textContent='草稿未保存，请保留输入后重试。';return;}
+ $('#quick-scene').value='';$('#quick-status').textContent='';$('#quick-capture').open=false;render();$('#library-status').textContent='卡点已保存为草稿，可以直接关闭；想做时再开始选题。';
+}
+function startTopicFromScene(){
+ const scene=value(4,'scene').trim();if(!scene)return;
+ const existing=!!value(3,'topic').trim();
+ if(!existing){state.values[3].topic=scene;invalidate(3);if(!save())return;}
+ navigate(3);$('#notice').textContent=existing?'已保留已有选题，可继续完善。':'卡点原话已带入选题；其他判断留空，想好再填。';
+}
 function switchNote(id){if(!save()){refreshLibrary();return;}const previous=state;state=library.notes.find(n=>n.id===id)||state;library.activeId=state.id;if(!persistLibrary()){state=previous;library.activeId=previous.id;}refreshLibrary();render();}
 function dataURL(blob){return new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=()=>reject(reader.error);reader.readAsDataURL(blob);});}
 let libraryBusy=false;
@@ -141,6 +156,7 @@ function updateChrome(){
  $('#count').textContent=state.done.filter((_,i)=>completeAt(i)).length+'/16步已完成';$('#progress').value=state.done.filter((_,i)=>completeAt(i)).length;
  const nav=$('#steps');nav.replaceChildren();let phase=-1;
  steps.forEach((s,i)=>{if(s.phase!==phase){phase=s.phase;nav.append(el('div','阶段'+['一','二','三'][phase]+' · '+phaseNames[phase],'phase'));}const b=el('button');b.type='button';b.dataset.step=i;if(i===state.step)b.setAttribute('aria-current','step');b.append(el('span',state.review[i]?'!':completeAt(i)?'✓':String(i+1).padStart(2,'0'),'step-number'),el('span',s.name),el('span',statusAt(i),'status-tag'));b.onclick=()=>navigate(i);nav.append(b);});
+ const topicButton=$('#scene-to-topic');if(topicButton){topicButton.disabled=!value(4,'scene').trim();topicButton.textContent=value(3,'topic').trim()?'查看已有选题 →':'用这个卡点开始选题 →';}
  const i=state.step;$('#primary').textContent=i===15?(allReady()?'导出 Markdown 成品':'导出 Markdown 草稿'):completeAt(i)?'已完成，进入下一步 →':'请AI帮我处理这一步';$('#complete').hidden=i===15||completeAt(i);$('#complete').textContent=state.review[i]?'已复核，确认本板块完成':'确认这一步已完成';$('#next-specific').textContent=i<15?`建议下一步：${String(i+2).padStart(2,'0')} ${steps[i+1].name} — ${steps[i+1].action} 也可直接切换左侧任意板块并行推进。`:'随时可以导出草稿；全部完成并复核后导出成品。';
  $('#review-notice').hidden=!state.review[i];$('#review-notice').textContent='相关内容有更新，请复核本板块。已填内容和勾选均保留。';
  const active=steps.slice(0,15).map((s,j)=>statusAt(j)==='进行中'?String(j+1).padStart(2,'0')+' '+s.name:null).filter(Boolean);$('#parallel-state').textContent=active.length?'正在推进：'+active.join(' · '):'可以从任何板块开始；填好一部分也会自动保存。';
@@ -174,6 +190,7 @@ function render(){
  else if(i===14){rounds.forEach((r,j)=>area.append(checkbox(`${j+1}. ${r}`,state.revision[j],v=>{state.revision[j]=v;changed(14);},'revision-'+j)));steps[i].fields.forEach(f=>area.append(field(f,i)));}
  else if(i===15){const pending=steps.slice(0,15).map((s,j)=>completeAt(j)?null:String(j+1).padStart(2,'0')+' '+s.name).filter(Boolean);area.append(el('p',pending.length?'可导出当前草稿。待完成或复核：'+pending.join('、'):'01—15 已全部确认，可以导出成品。','linked'));const preview=el('pre',markdown());preview.id='export-preview';area.append(preview);}
  else s.fields.forEach(f=>area.append(field(f,i)));
+ if(i===4){const b=button('用这个卡点开始选题 →',startTopicFromScene);b.id='scene-to-topic';area.append(b);}
  updateChrome();
 }
 function mdStep(i){const s=steps[i];let text=`## ${String(i+1).padStart(2,'0')} ${s.name}\n\n状态：${statusAt(i)}\n\n`;
@@ -196,6 +213,9 @@ $('#download-handoff').onclick=()=>download(handoff,date()+'-第'+(state.step+1)
 window.addEventListener('beforeunload',e=>{if(storageError||pendingUploads){e.preventDefault();e.returnValue='';}});
 $('#resume-note').oninput=e=>{state.resume={text:e.target.value,step:state.step};save();refreshResume();};
 $('#resume-jump').onclick=()=>navigate(state.resume.step);
+$('#save-quick').onclick=captureQuickNote;
+$('#cancel-quick').onclick=()=>{$('#quick-capture').open=false;$('#quick-status').textContent='';};
+$('#quick-capture').ontoggle=()=>{if($('#quick-capture').open)$('#quick-scene').focus();};
 $('#new-note').onclick=createNote;
 $('#note-picker').onchange=e=>switchNote(e.target.value);
 $('#backup-all').onclick=()=>libraryTask(backupLibrary);
