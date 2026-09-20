@@ -6,7 +6,7 @@ const steps=[
  {name:'账号定位',phase:0,action:'分别回答定位三问。',hint:'具体到内容类型、读者处境，以及为什么愿意看你。',fields:[F('type','内容类型'),F('audience','目标读者'),F('reason','为什么能打动他们')]},
  {name:'内容原则与限制',phase:0,action:'写清坚持什么，尤其是什么不做。',hint:'例如只做雅思相关 AI 干货；1000 粉前不做视频，除非有商单。',fields:[F('principles','内容原则'),F('limits','什么不做 / 限制')]},
  {name:'账号人格摘要',phase:0,action:'四项分别填写，形成账号长期的表达基础。',hint:'抱负是长期渴望；价值观是坚持的原则；对抗是一直想克服的东西；顿悟是认知转变。',fields:[F('ambition','抱负'),F('values','价值观'),F('against','对抗'),F('insight','顿悟')]},
- {name:'选题',phase:0,action:'确定一个题目，并按三个维度自检。',hint:'判断是不是读者真卡点、你有什么独特经历、手头有什么证据。',fields:[F('topic','选题'),F('need','刚需度'),F('difference','差异化'),F('evidence','证据完整度')]},
+ {name:'选题',phase:0,action:'先写这篇要解决的一个问题，再回答下面三个问题。每项先写一句就够。',hint:'以“单词看得懂，但录音里听不出来”为选题示例：谁在什么练习里遇到它？你准备亲自试什么，能补充什么具体过程？你手上有哪些原始截图、录音或练习记录？还没有证据，就写“尚未验证，准备怎样试”。这里是在确定值得尝试的问题，不是提前证明方法有效。',fields:[F('topic','这篇想解决什么问题？（选题）'),F('need','谁会在什么情况下被它卡住？（刚需度）'),F('difference','你能补充什么亲自尝试的过程或发现？（差异化）'),F('evidence','现在有什么证据，还缺什么？（证据完整度）')]},
  {name:'真实卡点梳理',phase:0,action:'具体写下这一次踩坑的场景。',hint:'写哪一次、在做什么、卡在哪一步。先留下真实场景，不急着概括成大道理。',fields:[F('scene','这次要写的具体踩坑 / 场景')]},
  {name:'五步初稿',phase:0,action:'五项各写一句话，先求真实和完整。',hint:'依次交代场景、情绪、AI 操作、验证结果和现有素材。没有验证就明确写“尚未验证”。',fields:[F('before','Before 场景'),F('emotion','Before 情绪'),F('ai','怎么用 AI 解决'),F('result','验证结果'),F('assets','可用配图素材')]},
  {name:'一句话概述',phase:1,action:'用“人群标签＋痛点”写出不超过 20 字的概述。',hint:'例如“雅思备考党，单词背了又忘”。让读者立即判断是否与自己有关。',fields:[F('summary','一句话概述',1,20)]},
@@ -24,7 +24,7 @@ const minimumGuides=[
  ['定位太大，不知道从哪写。','内容类型、目标读者、打动他们的理由，各写一句具体的话。'],
  ['原则容易写成口号。','写一条坚持的原则，再写一条明确不做的事。'],
  ['担心自己还没有鲜明人格。','抱负、价值观、对抗、顿悟各写一句真实想法，先不用润色。'],
- ['选题太多，迟迟定不下来。','先写一个具体卡点作为选题，再为刚需、差异和证据各留一句判断。'],
+ ['知道术语，却不知道格子里该写什么。','写一个具体卡点；再各写一句：谁会遇到、你准备亲自试什么、已有或待补的证据。不确定可以如实写。'],
  ['只有大问题，没有具体经历。','写清一次真实场景：在做什么、卡在哪一步。'],
  ['一上来就想写完整文章。','五项各一句：场景、情绪、AI 做法、验证结果、可用素材；未验证就如实注明。'],
  ['一句话塞进太多信息。','20 字以内，说清一个人群和一个痛点。'],
@@ -134,14 +134,14 @@ async function restoreLibrary(file){
 }
 
 // Direct relationships, not a blanket reset of every subsequent block.
-const dependencies={0:[3],1:[14],2:[14],3:[6,7,8,10],4:[5],5:[7,10,13],6:[8],7:[10],8:[12,14],9:[13,14],10:[13],11:[12,14],12:[14],13:[14],14:[]};
+const dependencies={0:[3],1:[14],2:[14],3:[6,7,8,10],4:[5],5:[7,10,13],6:[8],7:[10],8:[12,14],9:[12,13,14],10:[13],11:[12,14],12:[14],13:[12,14],14:[]};
 const completeAt=i=>state.done[i]&&!state.review[i];
 const allReady=()=>state.done.slice(0,15).every((_,i)=>completeAt(i));
 function hasContent(i){return Object.values(state.values[i]||{}).some(v=>String(v).trim())||(i===12&&(state.shots.some(Boolean)||state.references.some(r=>r.A||r.B)))||(i===14&&state.revision.some(Boolean));}
 function statusAt(i){if(state.review[i])return '待复核';if(completeAt(i))return '已完成';if(state.working[i]||hasContent(i))return '进行中';return '未开始';}
 function invalidate(i){state.done[i]=false;state.review[i]=false;state.working[i]=true;for(const j of dependencies[i]||[]){if(state.done[j]||hasContent(j))state.review[j]=true;}state.done[15]=false;}
 function changed(i){invalidate(i);save();updateChrome();}
-function photoSignature(i){return JSON.stringify([value(8,'formula')||titleTypes[0],value(8,'title'),value(11,'image'+i),state.style]);}
+function photoSignature(i){return JSON.stringify([value(8,'formula')||titleTypes[0],value(8,'title'),value(11,'image'+i),state.style,...(photoBody().some(p=>p.text)?[photoBody().map(p=>p.text)]:[])]);}
 function refsCurrent(i){return ['A','B'].every(a=>state.references[i][a]?.signature===photoSignature(i));}
 function errors(i){
  const s=steps[i],out=[];
@@ -166,17 +166,32 @@ function field(f,i,readonly=false,override){const wrap=el('div',undefined,'field
 function checkbox(text,checked,fn,id){const l=el('label',undefined,'check'),c=el('input');c.type='checkbox';c.checked=checked;if(id)c.id=id;c.onchange=()=>fn(c.checked);l.append(c,el('span',text));return l;}
 function button(text,fn){const b=el('button',text);b.type='button';b.onclick=fn;return b;}
 function advice(i){const focus=value(11,'image'+i)||'请先填写第 12 步重点';const props=[['真实使用的书页或错题','笔'],['原方法与新方法的真实材料','笔'],['实际 AI 操作界面'],['实际制作出的词卡或结果','笔'],['真实复习记录或验证材料','笔']][i];return {focus,props:props.join('、'),arrangement:'将与“'+focus+'”直接有关的材料放在主体位置；其他物品退到边缘，标题区域留白，不补造记录。',A:'俯拍展开全景，交代材料之间的关系；手指向当前重点。',B:'45° 斜侧近拍，突出真实操作动作和材料细节；不挡住重点文字。'};}
-function photoTask(indices){let text=`请使用 content-photo-reference 拍摄参考方法及内置生图，为以下真人实拍页面分别生成 A/B 两张独立参考图（每张 3:4），不要只交提示词。\n标题类型：${value(8,'formula')||titleTypes[0]}\n标题：${value(8,'title')||'尚未填写'}\n风格：${anchors.join('、')}。照片感实物，不做装饰海报；每张印上本页重点及“参考稿，非发布成片”。不得伪造可读软件界面、学习数据、词义或词根。\n`;
- indices.forEach(i=>{const a=advice(i);text+=`\n图 ${i+1} · ${photoNames[i]}\n本页重点：${a.focus}\n道具建议：${a.props}\n摆放建议：${a.arrangement}\n构图 A：${a.A}\n构图 B：${a.B}\n请将文件命名为 ${String(i+1).padStart(2,'0')}-A.png 与 ${String(i+1).padStart(2,'0')}-B.png，并逐张检查文字、手部动作和两个角度的差异。\n`;});return text;}
+function photoBody(){return [{label:'开头',text:value(9,'opening')},...steps[13].fields.map(f=>({label:f.label,text:value(13,f.id)}))];}
+function requestPhotoTask(indices,cover=false){
+ $('#handoff').hidden=true;
+ if(!indices.length){$('#notice').textContent='当前全部为 AI 截图，无需生成拍摄参考图。';return;}
+ if(cover&&state.sources[0]!=='真人实拍'){$('#notice').textContent='图 1 当前设为 AI 截图，保留真实截图；要试拍封面，可将图 1 的素材来源改为真人实拍。';return;}
+ const missing=[];if(!value(8,'title').trim())missing.push('第 09 步标题');if(photoBody().some(p=>!p.text.trim()))missing.push('第 14 步正文（含引用第 10 步的开头）');
+ if(missing.length){$('#handoff').hidden=true;$('#notice').textContent='先写好'+missing.join('和')+'，再来准备参考图。可以直接跳过去填写，无需先勾选完成，也不检查字数。';return;}
+ showHandoff(photoTask(indices,cover));
+}
+function photoTask(indices,cover=false){
+ let text=`请调用 $content-photo-reference，并按可用 imagegen 技能使用内置生图。\n本次范围：${cover?'只试封面（对应工作台图 1），仅生成 A/B 两张独立参考图，不扩展其他页。':'按下列工作台清单，为选中的真人实拍页分别生成 A/B 两张独立参考图。'}\n预期图片数量：${indices.length*2} 张。每张竖版 3:4。\n本篇采用已确定的五图框架；保持编号，不另拆页、不凑页。标为 AI 截图的页只用真实操作截图，不生成仿造界面。\n标题类型：${value(8,'formula')||titleTypes[0]}\n标题：${value(8,'title')}\n\n正文（本篇事实依据）：\n${photoBody().map(p=>p.label+'\n'+p.text).join('\n\n')}\n\n完整五图清单：\n${photoNames.map((n,i)=>`图 ${i+1} · ${n} · ${state.sources[i]}：${value(11,'image'+i)||'重点未填，请依据正文提炼，并在交付时列明，供填回第12步'}`).join('\n')}\n\n统一风格：${anchors.join('、')}。普通手机实拍感、纸张和手部动作，整套桌面与光线一致。道具优先普通纸、笔、书，按正文选择，不把所有主题套成单词卡。\n每页 A/B 印同一句本页重点；每张底部实际印上“参考稿，非发布成片”。不得虚构学习效果、日期、词义、词根、统计和可读软件界面。正文与重点有冲突时采用正文支持的保守表述并说明。\n`;
+ indices.forEach(i=>{text+=`\n生成图 ${i+1} · ${cover?'封面（困境）':photoNames[i]}\n本页重点：${value(11,'image'+i)||'从正文提炼一句，不编造事实'}\n构图 A：俯拍展开全景，交代材料关系。\n构图 B：斜侧近拍，突出手部动作与关键材料。两种构图须有实质差异。\n文件名：${String(i+1).padStart(2,'0')}-A.png、${String(i+1).padStart(2,'0')}-B.png。\n`;});
+ text+='\n交付：直接生成本次范围内的图片，不只交提示词。逐张检查文字、手部、道具可复现性、A/B 差异与尺寸。按图号展示两种构图，附本页重点、简短道具和摆放建议。图片及提示词存入新的版本目录，保留旧文件；已知本篇项目文件夹时放进其“02-制作过程”，路径未知时使用当前项目新的输出目录，不声称已自动关联。不能生成时如实说明缺失项。生成图片不代表已实拍完成。\n网页不会自动接收结果，请说明将图片放回第13步对应的 A/B 位置；新提炼的重点需填回第12步，先填重点再放图。';
+ return text;
+}
 const dbPromise=new Promise((resolve,reject)=>{if(!window.indexedDB){reject(new Error('浏览器不支持素材保存'));return;}const req=indexedDB.open('ielts-workbench-assets',1);req.onupgradeneeded=()=>req.result.createObjectStore('images');req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error);});dbPromise.catch(()=>{});
 async function putAsset(id,blob){const db=await dbPromise;return new Promise((res,rej)=>{const tx=db.transaction('images','readwrite');tx.objectStore('images').put(blob,id);tx.oncomplete=res;tx.onerror=()=>rej(tx.error);});}
 async function getAsset(id){const db=await dbPromise;return new Promise((res,rej)=>{const r=db.transaction('images').objectStore('images').get(id);r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error);});}
 function renderPhotos(container,token){
  container.append(el('p',`引用 09：${value(8,'formula')||titleTypes[0]}\n标题：${value(8,'title')||'尚未填写'}`,'linked'));
  const styleBox=el('div');styleBox.append(el('h3','风格锚点确认'));anchors.forEach((a,i)=>styleBox.append(checkbox(a,state.style[i],v=>{state.style[i]=v;state.shots.fill(false);changed(12);render();},'anchor-'+i)));container.append(styleBox);
- container.append(button('为全部真人实拍图生成 A/B 参考任务',()=>{const ids=state.sources.map((s,i)=>s==='真人实拍'?i:-1).filter(i=>i>=0);if(!ids.length){$('#notice').textContent='当前全部为 AI 截图，无需生成拍摄参考图。';return;}if(ids.some(i=>!value(11,'image'+i).trim())){$('#notice').textContent='先补齐第 12 步对应图片重点。';return;}showHandoff(photoTask(ids));}));
+ container.append(el('p','拍摄参考 Skill 已接入任务整理。先写好标题和正文，再选封面试拍或整套；复制任务到 Codex 生成，回来放入图片。','muted'));
+ const controls=el('div',undefined,'actions');const cover=button('先试封面 A/B（交给 Codex）',()=>requestPhotoTask([0],true));cover.id='photo-cover-task';const all=button('整套实拍参考任务（交给 Codex）',()=>requestPhotoTask(state.sources.map((s,i)=>s==='真人实拍'?i:-1).filter(i=>i>=0)));all.id='photo-all-task';controls.append(cover,all,button('去第 14 步写正文',()=>navigate(13)));container.append(controls);
+
  photoNames.forEach((n,i)=>{const card=el('section',undefined,'photo-card');card.append(el('h3',`图 ${i+1} · ${n}`),el('p','引用 12：'+(value(11,'image'+i)||'尚未填写'),'linked'));const l=el('label','素材来源');l.htmlFor='source-'+i;const sel=el('select');sel.id='source-'+i;['真人实拍','AI截图'].forEach(v=>{const o=el('option',v);o.value=v;sel.append(o);});sel.value=state.sources[i];sel.onchange=()=>{state.sources[i]=sel.value;state.shots[i]=false;changed(12);render();};card.append(l,sel);
- if(state.sources[i]==='真人实拍'){const a=advice(i);card.append(el('p','道具清单：'+a.props),el('p','摆放建议：'+a.arrangement),button('生成这张图的 A/B 参考任务（交给 Codex）',()=>{if(!value(11,'image'+i).trim()){$('#notice').textContent='先填写这一张图的重点。';return;}showHandoff(photoTask([i]));}));const grid=el('div',undefined,'angles');['A','B'].forEach(angle=>{const box=el('div',undefined,'reference');box.append(el('p',`构图 ${angle}：${a[angle]}`));const img=el('img');img.alt=`图 ${i+1} 构图 ${angle} 的 AI 拍摄参考图`;img.hidden=true;box.append(img);const meta=state.references[i][angle];const status=el('p',meta?meta.name+' · '+(meta.signature===photoSignature(i)?'已放入参考图':'重点或风格已变化，请重新生成'):'待生成参考图','muted');if(meta&&meta.signature!==photoSignature(i))status.classList.add('stale');box.append(status);
+ if(state.sources[i]==='真人实拍'){const a=advice(i);card.append(el('p','道具清单：'+a.props),el('p','摆放建议：'+a.arrangement),button('生成这张图的 A/B 参考任务（交给 Codex）',()=>requestPhotoTask([i])));const grid=el('div',undefined,'angles');['A','B'].forEach(angle=>{const box=el('div',undefined,'reference');box.append(el('p',`构图 ${angle}：${a[angle]}`));const img=el('img');img.alt=`图 ${i+1} 构图 ${angle} 的 AI 拍摄参考图`;img.hidden=true;box.append(img);const meta=state.references[i][angle];const status=el('p',meta?meta.name+' · '+(meta.signature===photoSignature(i)?'已放入参考图':'正文、重点或风格已变化，请重新生成'):'待生成参考图','muted');if(meta&&meta.signature!==photoSignature(i))status.classList.add('stale');box.append(status);
  if(meta)getAsset(meta.id).then(blob=>{if(token!==renderId)return;if(!blob){status.textContent='图片文件未找到，请重新选择';state.references[i][angle]=null;invalidate(12);save();updateChrome();return;}const url=URL.createObjectURL(blob);urls.push(url);img.src=url;img.hidden=false;}).catch(()=>{status.textContent='素材库不可用，请重新选择图片';});
  const lab=el('label','放入生成后的参考图 '+angle);const input=el('input');input.type='file';input.accept='image/png,image/jpeg,image/webp';input.id=`ref-${i}-${angle}`;lab.htmlFor=input.id;input.onchange=async()=>{const file=input.files[0];if(!file)return;if(!['image/png','image/jpeg','image/webp'].includes(file.type)||file.size>12*1024*1024){status.textContent='请选择 12 MB 以内的 PNG、JPG 或 WebP 图片';return;}const sig=photoSignature(i),owner=state;pendingUploads++;showSaved();try{const decoded=await createImageBitmap(file);decoded.close();const id=crypto.randomUUID();await putAsset(id,file);owner.references[i][angle]={id,name:file.name,signature:sig};owner.shots[i]=false;owner.done[12]=false;owner.working[12]=true;owner.done[15]=false;owner.savedAt=new Date().toISOString();if(owner===state){changed(12);if(state.step===12)render();}else persistLibrary();}catch{status.textContent='图片读取或保存失败，请重新选择';}finally{pendingUploads--;showSaved();}};box.append(lab,input);grid.append(box);});card.append(grid);}else card.append(el('p','直接截取真实 AI 操作过程或结果，保留关键输入与输出；这一张不生成仿造界面。','muted'));
  card.append(checkbox(state.sources[i]==='真人实拍'?'已实拍完成':'已截图完成',state.shots[i],v=>{state.shots[i]=v;changed(12);},'shot-'+i));container.append(card);
@@ -207,7 +222,7 @@ function download(text,name,type='text/markdown;charset=utf-8'){const url=URL.cr
 function showHandoff(text){handoff=text;$('#handoff-text').value=text;$('#handoff').hidden=false;$('#handoff').open=true;$('#notice').textContent='任务已整理好。复制到当前 Codex 对话执行。';$('#handoff').scrollIntoView({behavior:'smooth',block:'nearest'});}
 $('#post-name').oninput=e=>{state.name=e.target.value;save();};
 $('#complete').onclick=()=>{const e=errors(state.step);if(e.length){$('#notice').textContent=e.join('；');return;}state.done[state.step]=true;state.review[state.step]=false;state.working[state.step]=false;save();updateChrome();$('#notice').textContent='本板块已完成，可继续任意其他板块。';};
-$('#primary').onclick=()=>{const i=state.step;if(i===15){const e=errors(15);if(e.length){$('#notice').textContent=e.join('；');return;}download(markdown(),filename());state.done[15]=allReady();save();updateChrome();$('#notice').textContent=(allReady()?'成品':'草稿')+' Markdown 已生成并发起下载。';return;}if(completeAt(i)){navigate(i+1);return;}state.working[i]=true;save();updateChrome();if(i===12){const ids=state.sources.map((s,j)=>s==='真人实拍'?j:-1).filter(j=>j>=0);if(!ids.length){showHandoff('请依据以下清单检查五张真实 AI 截图所需内容：\n'+mdStep(11));return;}showHandoff(photoTask(ids));return;}let task='请继续我的雅思 AI 图文制作，仅处理第 '+(i+1)+' 步「'+steps[i].name+'」。\n'+steps[i].action+'\n'+steps[i].hint+'\n保留原方法，不合并板块，不虚构经历或效果。\n\n';task+='本篇允许多个板块并行推进。以下是所有板块的当前内容与状态；只处理本次指定板块，不以编号顺序推断其他板块为空。\n';for(let j=0;j<15;j++)task+=mdStep(j);showHandoff(task);};
+$('#primary').onclick=()=>{const i=state.step;if(i===15){const e=errors(15);if(e.length){$('#notice').textContent=e.join('；');return;}download(markdown(),filename());state.done[15]=allReady();save();updateChrome();$('#notice').textContent=(allReady()?'成品':'草稿')+' Markdown 已生成并发起下载。';return;}if(completeAt(i)){navigate(i+1);return;}state.working[i]=true;save();updateChrome();if(i===12){const ids=state.sources.map((s,j)=>s==='真人实拍'?j:-1).filter(j=>j>=0);if(!ids.length){showHandoff('请依据以下清单检查五张真实 AI 截图所需内容：\n'+mdStep(11));return;}requestPhotoTask(ids);return;}let task='请继续我的雅思 AI 图文制作，仅处理第 '+(i+1)+' 步「'+steps[i].name+'」。\n'+steps[i].action+'\n'+steps[i].hint+'\n保留原方法，不合并板块，不虚构经历或效果。\n\n';task+='本篇允许多个板块并行推进。以下是所有板块的当前内容与状态；只处理本次指定板块，不以编号顺序推断其他板块为空。\n';for(let j=0;j<15;j++)task+=mdStep(j);showHandoff(task);};
 $('#copy-handoff').onclick=async()=>{try{await navigator.clipboard.writeText(handoff);$('#notice').textContent='任务已复制，可以粘贴到 Codex。';}catch{$('#handoff-text').focus();$('#handoff-text').select();$('#notice').textContent='已选中文字，请按 Command+C 复制。';}};
 $('#download-handoff').onclick=()=>download(handoff,date()+'-第'+(state.step+1)+'步-AI任务.md');
 window.addEventListener('beforeunload',e=>{if(storageError||pendingUploads){e.preventDefault();e.returnValue='';}});
