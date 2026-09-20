@@ -1,0 +1,11 @@
+{
+  "name": "ielts-content-workbench",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Local-first IELTS AI content workbench",
+  "scripts": {
+    "test": "node --check app.js && node test-workbench.cjs && node test-parallel.cjs && node test-library.cjs",
+    "sync": "bash scripts/sync.sh"
+  },
+  "devDependencies": { "playwright": "1.62.1" }
+}

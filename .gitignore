@@ -1,0 +1,23 @@
+# Only reviewed application code enters the repository. Personal backups stay local.
+/*
+!/.gitignore
+!/AGENTS.md
+!/README.md
+!/CHANGELOG.md
+!/index.html
+!/app.js
+!/app.css
+!/package.json
+!/package-lock.json
+!/test-*.cjs
+!/scripts/
+/scripts/*
+!/scripts/sync.sh
+!/.github/
+/.github/*
+!/.github/workflows/
+/.github/workflows/*
+!/.github/workflows/check.yml
+!/assets/
+/assets/*
+!/assets/workbench-icon.png
