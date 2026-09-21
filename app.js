@@ -15,7 +15,7 @@ const steps=[
  {name:'开头',phase:1,action:'写 100—150 字的钩子，让目标读者愿意往下看。',hint:'压缩交代处境和变化，先让读者认出自己，再引出方法。此段会自动引用到第 14 步。',fields:[F('opening','开头',100,150)]},
  {name:'一页大纲',phase:1,action:'将四个部分分别展开，说明每段要讲什么。',hint:'场景要具体，转折有事件，结果有依据，路径能照做。',fields:[F('before','Before 展开'),F('turn','转折点展开'),F('after','After 展开'),F('bridge','Bridge 展开')]},
  {name:'配图清单',phase:1,action:'五张图各写一句重点；下一步会直接引用。',hint:'图不是装饰。分别承担困境、认知冲击、过程、成果、验证五种信息作用。',fields:[F('image0','图 1 · 困境'),F('image1','图 2 · 认知冲击'),F('image2','图 3 · 过程'),F('image3','图 4 · 成果'),F('image4','图 5 · 验证')]},
- {name:'拍摄清单与AI参考图',phase:1,action:'确认素材来源，为实拍图生成两个构图的参考，再逐张完成拍摄。',hint:'过程图默认 AI 截图，其余默认真人实拍。参考图只指导构图，不代替真实照片。生成任务交给当前 Codex 对话，生成后将 A/B 参考图放回对应位置。',fields:[]},
+ {name:'找参考图',phase:1,action:'接着第 12 步的重点，找到适合你、能借鉴、能做出来的画面。',hint:'先看这张图要表达什么，再找构图、留白或信息层次相近的参考，不必只搜雅思。候选不用全存；选中后留一句借鉴点。一张参考可以指导多张配图，已有思路也可直接跳过找图。',fields:[]},
  {name:'正文',phase:2,action:'按七部分独立填写；开头自动引用第 10 步。',hint:'正文讲清楚方法和证据。每段按对应区间组织，计数不含空格与换行、包含标点。',fields:[F('before','Before 具体展开',100,150),F('turn','转折点',80,120),F('middle','After 中间转折',60,100),F('core','After 核心方法',120,180),F('bridge','Bridge 操作步骤',120,180),F('ending','结尾',40,60)]},
  {name:'六轮修改法',phase:2,action:'按原六轮顺序逐条完成，再确认本步骤。',hint:'每轮只处理对应问题。先完成真实化，再检查节奏、语言、标题、图文和最终校对。',fields:[F('notes','修改记录（选填）')]},
  {name:'导出成品',phase:2,action:'随时导出当前草稿；全部板块完成后导出成品。',hint:'文件名使用今天日期＋一句话概述关键词。参考图会保留文件名与使用状态；原图请另外保存。',fields:[]}
@@ -33,7 +33,7 @@ const minimumGuides=[
  ['想把所有背景都写在开头。','写 100—150 字，让读者认出自己的处境并愿意往下看。'],
  ['有故事，但不知道怎么分段。','四项各写清这段要讲的具体内容，暂时不追求漂亮句子。'],
  ['先找好看的图，却不知道图要说明什么。','五张图各写一句要传达的重点，先不用准备齐素材。'],
- ['不知道先拍哪张、怎么摆。','先从一张图开始；本步完成需五张重点、标题、四项风格确认、实拍图的 A/B 参考图，以及五张拍摄或截图勾选。'],
+ ['脑中没有画面，不知道该做出什么样的图。','五张图各有方向：选一张参考并写明借鉴点，或沿用另一张的参考，或标记已有思路。不要求 A/B、正文写完或实拍完成。'],
  ['想一口气写出成稿。','先写最有把握的一段；确认完成前，开头与其余六段需齐全并达到各自字数区间。'],
  ['每次修改都从头到尾一起改。','每轮只检查一件事，六项实际检查完后逐条勾选；修改记录可不填。'],
  ['总觉得还没完美，迟迟不导出。','草稿也能导出：下载一份 Markdown 即可留底；完整恢复请用左侧备份。']
@@ -111,13 +111,52 @@ function startTopicFromScene(){
 function switchNote(id){if(!save()){refreshLibrary();return;}const previous=state;state=library.notes.find(n=>n.id===id)||state;library.activeId=state.id;if(!persistLibrary()){state=previous;library.activeId=previous.id;}refreshLibrary();render();}
 function dataURL(blob){return new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=()=>reject(reader.error);reader.readAsDataURL(blob);});}
 let libraryBusy=false;
-async function libraryTask(fn){if(libraryBusy)return;libraryBusy=true;document.querySelectorAll('#library-tools button').forEach(b=>b.disabled=true);try{await fn();}catch(e){$('#library-status').textContent=e.message;}finally{libraryBusy=false;document.querySelectorAll('#library-tools button').forEach(b=>b.disabled=false);}}
+async function libraryTask(fn){if(libraryBusy)return;libraryBusy=true;document.querySelectorAll('#library-tools button').forEach(b=>b.disabled=true);try{await fn();}catch(e){$('#library-status').textContent=e.message;}finally{libraryBusy=false;document.querySelectorAll('#library-tools button').forEach(b=>b.disabled=false);showBackupDirectory();}}
+let backupDirectory=null;
+const backupSettings=new Promise((resolve,reject)=>{
+ const req=indexedDB.open('ielts-workbench-settings',1);
+ req.onupgradeneeded=()=>req.result.createObjectStore('preferences');
+ req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error);
+});backupSettings.catch(()=>{});
+async function rememberBackupDirectory(handle){const db=await backupSettings;return new Promise((resolve,reject)=>{const tx=db.transaction('preferences','readwrite');const store=tx.objectStore('preferences');if(handle)store.put(handle,'backup-directory');else store.delete('backup-directory');tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(tx.error);});}
+function showBackupDirectory(){
+ $('#backup-directory-state').textContent=backupDirectory?'备份目录：'+backupDirectory.name+'（需要时浏览器会再次请求授权）':'未指定目录，备份将使用浏览器下载。';
+ $('#clear-backup-directory').hidden=!backupDirectory;
+ $('#choose-backup-directory').disabled=!window.showDirectoryPicker;
+ if(!window.showDirectoryPicker)$('#backup-directory-state').textContent='当前浏览器不支持指定目录，请用 Chrome，或下载后手动放入备份文件夹。';
+}
+const backupDirectoryReady=backupSettings.then(db=>new Promise((resolve,reject)=>{const r=db.transaction('preferences').objectStore('preferences').get('backup-directory');r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);})).then(handle=>{if(!backupDirectory&&handle)backupDirectory=handle;showBackupDirectory();}).catch(()=>{$('#backup-directory-state').textContent='无法读取目录设置，仍可下载备份。';});
+async function chooseBackupDirectory(){
+ try{
+ const handle=await window.showDirectoryPicker({id:'workbench-backups',mode:'readwrite',startIn:'documents'});
+ await backupDirectoryReady;backupDirectory=handle;showBackupDirectory();
+ try{await rememberBackupDirectory(handle);$('#library-status').textContent='已记住备份目录。以后点击“备份全部笔记”将优先保存到这里。';}
+ catch{$('#library-status').textContent='目录本次可用，但未能记住；下次打开请重新选择。';}
+ }catch(e){if(e.name!=='AbortError')$('#library-status').textContent='目录未设置：'+e.message;}
+}
+async function clearBackupDirectory(){await backupDirectoryReady;await rememberBackupDirectory(null);backupDirectory=null;showBackupDirectory();$('#library-status').textContent='已恢复浏览器下载方式，原备份文件没有改动。';}
+async function directoryForBackup(){
+ await backupDirectoryReady;if(!backupDirectory)return {directory:null,reason:''};
+ try{let permission=await backupDirectory.queryPermission({mode:'readwrite'});if(permission!=='granted')permission=await backupDirectory.requestPermission({mode:'readwrite'});
+ return permission==='granted'?{directory:backupDirectory,reason:''}:{directory:null,reason:'指定目录未获授权，'};
+ }catch{return {directory:null,reason:'指定目录不可用，'};}
+}
+async function writeBackupFile(directory,name,content){
+ let stream;try{const file=await directory.getFileHandle(name,{create:true});stream=await file.createWritable();await stream.write(content);await stream.close();}
+ catch(e){if(stream)try{await stream.abort();}catch{}throw e;}
+}
 async function backupLibrary(){
- const snapshot=structuredClone(library);const assets=[];const ids=new Set(snapshot.notes.flatMap(n=>n.references.flatMap(r=>['A','B'].map(a=>r[a]?.id).filter(Boolean))));
+ const snapshot=structuredClone(library);const destination=await directoryForBackup();const assets=[];const ids=new Set(snapshot.notes.flatMap(n=>n.references.flatMap(r=>['A','B'].map(a=>r[a]?.id).filter(Boolean))));
  $('#library-status').textContent='正在整理全部笔记和参考图…';
  for(const id of ids){const blob=await getAsset(id);if(!blob)throw Error('有参考图文件缺失，未生成完整备份。请重新放入缺失图片后再备份。');assets.push({id,data:await dataURL(blob)});}
- download(JSON.stringify({format:'ielts-workbench-backup',version:1,exportedAt:new Date().toISOString(),library:snapshot,assets}),date()+'-雅思图文工作台-完整备份.json','application/json');
- $('#library-status').textContent=`已发起下载：${snapshot.notes.length} 篇笔记、${assets.length} 张参考图。请保留下载的 JSON 文件。`;
+ const content=JSON.stringify({format:'ielts-workbench-backup',version:1,exportedAt:new Date().toISOString(),library:snapshot,assets});
+ const stamp=new Date();const time=[stamp.getHours(),stamp.getMinutes(),stamp.getSeconds()].map(x=>String(x).padStart(2,'0')).join('');
+ const name=date()+'-'+time+'-'+crypto.randomUUID().slice(0,8)+'-雅思图文工作台-完整备份.json';
+ let reason=destination.reason;
+ if(destination.directory){try{await writeBackupFile(destination.directory,name,content);$('#library-status').textContent=`已保存到「${destination.directory.name}」：${snapshot.notes.length} 篇笔记、${assets.length} 张参考图。文件：${name}`;return;}catch{reason='写入指定目录失败，';}}
+ download(content,name,'application/json');
+ $('#library-status').textContent=`${reason}已发起浏览器下载：${snapshot.notes.length} 篇笔记、${assets.length} 张参考图。请检查下载文件；尚未确认写入指定文件夹。`;
+
 }
 async function restoreLibrary(file){
  if(!file)return;if(!save())return;
@@ -142,10 +181,10 @@ function statusAt(i){if(state.review[i])return '待复核';if(completeAt(i))retu
 function invalidate(i){state.done[i]=false;state.review[i]=false;state.working[i]=true;for(const j of dependencies[i]||[]){if(state.done[j]||hasContent(j))state.review[j]=true;}state.done[15]=false;}
 function changed(i){invalidate(i);save();updateChrome();}
 function photoSignature(i){return JSON.stringify([value(8,'formula')||titleTypes[0],value(8,'title'),value(11,'image'+i),state.style,...(photoBody().some(p=>p.text)?[photoBody().map(p=>p.text)]:[])]);}
-function refsCurrent(i){return ['A','B'].every(a=>state.references[i][a]?.signature===photoSignature(i));}
+
 function errors(i){
  const s=steps[i],out=[];
- if(i===12){if(!state.style.every(Boolean))out.push('请确认四个风格锚点');if(!value(8,'title'))out.push('请先填写第 09 步标题');photoNames.forEach((n,j)=>{if(!value(11,'image'+j).trim())out.push(`图 ${j+1} 缺少第 12 步重点`);if(state.sources[j]==='真人实拍'&&!refsCurrent(j))out.push(`图 ${j+1} 需要与当前重点一致的 A/B 参考图`);if(!state.shots[j])out.push(`图 ${j+1} 尚未完成${state.sources[j]==='真人实拍'?'实拍':'截图'}`);});return out;}
+ if(i===12){photoNames.forEach((n,j)=>{if(!value(11,'image'+j).trim())out.push(`图 ${j+1} 缺少第 12 步重点`);if(!referenceReady(j))out.push(`图 ${j+1} 请选好参考并写一句借鉴点，或选择已有思路 / 沿用已选参考`);});return out;}
  if(i===14)return state.revision.every(Boolean)?[]:['请完成六个修改检查项'];
  if(i===15)return [];
  s.fields.forEach(f=>{const v=value(i,f.id).trim(),n=count(v);if(!v)out.push(`请填写「${f.label}」`);else if(f.min&&n<f.min)out.push(`「${f.label}」需至少 ${f.min} 字（目前 ${n} 字）`);else if(f.max&&n>f.max)out.push(`「${f.label}」需不超过 ${f.max} 字（目前 ${n} 字）`);});
@@ -157,7 +196,7 @@ function updateChrome(){
  const nav=$('#steps');nav.replaceChildren();let phase=-1;
  steps.forEach((s,i)=>{if(s.phase!==phase){phase=s.phase;nav.append(el('div','阶段'+['一','二','三'][phase]+' · '+phaseNames[phase],'phase'));}const b=el('button');b.type='button';b.dataset.step=i;if(i===state.step)b.setAttribute('aria-current','step');b.append(el('span',state.review[i]?'!':completeAt(i)?'✓':String(i+1).padStart(2,'0'),'step-number'),el('span',s.name),el('span',statusAt(i),'status-tag'));b.onclick=()=>navigate(i);nav.append(b);});
  const topicButton=$('#scene-to-topic');if(topicButton){topicButton.disabled=!value(4,'scene').trim();topicButton.textContent=value(3,'topic').trim()?'查看已有选题 →':'用这个卡点开始选题 →';}
- const i=state.step;$('#primary').textContent=i===15?(allReady()?'导出 Markdown 成品':'导出 Markdown 草稿'):completeAt(i)?'已完成，进入下一步 →':'请AI帮我处理这一步';$('#complete').hidden=i===15||completeAt(i);$('#complete').textContent=state.review[i]?'已复核，确认本板块完成':'确认这一步已完成';$('#next-specific').textContent=i<15?`建议下一步：${String(i+2).padStart(2,'0')} ${steps[i+1].name} — ${steps[i+1].action} 也可直接切换左侧任意板块并行推进。`:'随时可以导出草稿；全部完成并复核后导出成品。';
+ const i=state.step;$('#primary').textContent=i===15?(allReady()?'导出 Markdown 成品':'导出 Markdown 草稿'):completeAt(i)?'已完成，进入下一步 →':i===12?'帮我找参考（交给 Codex）':'请AI帮我处理这一步';$('#complete').hidden=i===15||completeAt(i);$('#complete').textContent=state.review[i]?'已复核，确认本板块完成':'确认这一步已完成';$('#next-specific').textContent=i<15?`建议下一步：${String(i+2).padStart(2,'0')} ${steps[i+1].name} — ${steps[i+1].action} 也可直接切换左侧任意板块并行推进。`:'随时可以导出草稿；全部完成并复核后导出成品。';
  $('#review-notice').hidden=!state.review[i];$('#review-notice').textContent='相关内容有更新，请复核本板块。已填内容和勾选均保留。';
  const active=steps.slice(0,15).map((s,j)=>statusAt(j)==='进行中'?String(j+1).padStart(2,'0')+' '+s.name:null).filter(Boolean);$('#parallel-state').textContent=active.length?'正在推进：'+active.join(' · '):'可以从任何板块开始；填好一部分也会自动保存。';
 
@@ -165,38 +204,80 @@ function updateChrome(){
 function field(f,i,readonly=false,override){const wrap=el('div',undefined,'field'),id=`field-${i}-${f.id}`,label=el('label',f.label+(f.min?`（${f.min}—${f.max} 字）`:''));label.htmlFor=id;const t=el('textarea');t.id=id;t.rows=i===13?5:3;t.maxLength=20000;t.value=override??value(i,f.id);t.readOnly=readonly;const small=el('small');function feedback(){const n=count(t.value);small.textContent=`${n} 字`+(readonly?' · 自动引用第 10 步，修改请回到开头板块':'');small.className=f.min&&(n<f.min||n>f.max)?'invalid':'';}feedback();t.oninput=()=>{state.values[i][f.id]=t.value;feedback();changed(i);};wrap.append(label,t,small);return wrap;}
 function checkbox(text,checked,fn,id){const l=el('label',undefined,'check'),c=el('input');c.type='checkbox';c.checked=checked;if(id)c.id=id;c.onchange=()=>fn(c.checked);l.append(c,el('span',text));return l;}
 function button(text,fn){const b=el('button',text);b.type='button';b.onclick=fn;return b;}
-function advice(i){const focus=value(11,'image'+i)||'请先填写第 12 步重点';const props=[['真实使用的书页或错题','笔'],['原方法与新方法的真实材料','笔'],['实际 AI 操作界面'],['实际制作出的词卡或结果','笔'],['真实复习记录或验证材料','笔']][i];return {focus,props:props.join('、'),arrangement:'将与“'+focus+'”直接有关的材料放在主体位置；其他物品退到边缘，标题区域留白，不补造记录。',A:'俯拍展开全景，交代材料之间的关系；手指向当前重点。',B:'45° 斜侧近拍，突出真实操作动作和材料细节；不挡住重点文字。'};}
 function photoBody(){return [{label:'开头',text:value(9,'opening')},...steps[13].fields.map(f=>({label:f.label,text:value(13,f.id)}))];}
-function requestPhotoTask(indices,cover=false){
- $('#handoff').hidden=true;
- if(!indices.length){$('#notice').textContent='当前全部为 AI 截图，无需生成拍摄参考图。';return;}
- if(cover&&state.sources[0]!=='真人实拍'){$('#notice').textContent='图 1 当前设为 AI 截图，保留真实截图；要试拍封面，可将图 1 的素材来源改为真人实拍。';return;}
- const missing=[];if(!value(8,'title').trim())missing.push('第 09 步标题');if(photoBody().some(p=>!p.text.trim()))missing.push('第 14 步正文（含引用第 10 步的开头）');
- if(missing.length){$('#handoff').hidden=true;$('#notice').textContent='先写好'+missing.join('和')+'，再来准备参考图。可以直接跳过去填写，无需先勾选完成，也不检查字数。';return;}
- showHandoff(photoTask(indices,cover));
-}
-function photoTask(indices,cover=false){
- let text=`请调用 $content-photo-reference，并按可用 imagegen 技能使用内置生图。\n本次范围：${cover?'只试封面（对应工作台图 1），仅生成 A/B 两张独立参考图，不扩展其他页。':'按下列工作台清单，为选中的真人实拍页分别生成 A/B 两张独立参考图。'}\n预期图片数量：${indices.length*2} 张。每张竖版 3:4。\n本篇采用已确定的五图框架；保持编号，不另拆页、不凑页。标为 AI 截图的页只用真实操作截图，不生成仿造界面。\n标题类型：${value(8,'formula')||titleTypes[0]}\n标题：${value(8,'title')}\n\n正文（本篇事实依据）：\n${photoBody().map(p=>p.label+'\n'+p.text).join('\n\n')}\n\n完整五图清单：\n${photoNames.map((n,i)=>`图 ${i+1} · ${n} · ${state.sources[i]}：${value(11,'image'+i)||'重点未填，请依据正文提炼，并在交付时列明，供填回第12步'}`).join('\n')}\n\n统一风格：${anchors.join('、')}。普通手机实拍感、纸张和手部动作，整套桌面与光线一致。道具优先普通纸、笔、书，按正文选择，不把所有主题套成单词卡。\n每页 A/B 印同一句本页重点；每张底部实际印上“参考稿，非发布成片”。不得虚构学习效果、日期、词义、词根、统计和可读软件界面。正文与重点有冲突时采用正文支持的保守表述并说明。\n`;
- indices.forEach(i=>{text+=`\n生成图 ${i+1} · ${cover?'封面（困境）':photoNames[i]}\n本页重点：${value(11,'image'+i)||'从正文提炼一句，不编造事实'}\n构图 A：俯拍展开全景，交代材料关系。\n构图 B：斜侧近拍，突出手部动作与关键材料。两种构图须有实质差异。\n文件名：${String(i+1).padStart(2,'0')}-A.png、${String(i+1).padStart(2,'0')}-B.png。\n`;});
- text+='\n交付：直接生成本次范围内的图片，不只交提示词。逐张检查文字、手部、道具可复现性、A/B 差异与尺寸。按图号展示两种构图，附本页重点、简短道具和摆放建议。图片及提示词存入新的版本目录，保留旧文件；已知本篇项目文件夹时放进其“02-制作过程”，路径未知时使用当前项目新的输出目录，不声称已自动关联。不能生成时如实说明缺失项。生成图片不代表已实拍完成。\n网页不会自动接收结果，请说明将图片放回第13步对应的 A/B 位置；新提炼的重点需填回第12步，先填重点再放图。';
- return text;
+function safeReferenceURL(raw){try{const u=new URL(raw);return ['https:','http:'].includes(u.protocol)?u.href:'';}catch{return '';}}
+function referenceMode(i){return value(12,'mode'+i)||'reference';}
+function directReferenceReady(i){return !!(state.references[i].A||state.references[i].B||safeReferenceURL(value(12,'link'+i)))&&!!value(12,'borrow'+i).trim();}
+function referenceReady(i){const mode=referenceMode(i);if(mode==='own')return true;if(mode.startsWith('shared:')){const target=Number(mode.slice(7));return Number.isInteger(target)&&target>=0&&target<5&&target!==i&&referenceMode(target)==='reference'&&directReferenceReady(target);}return directReferenceReady(i);}
+let selectedPhoto=0;
+function selectReference(i){state.values[12].activeImage=String(i);save();render();}
+function requestReferenceTask(indices){
+ const ready=indices.filter(i=>value(11,'image'+i).trim());
+ if(!ready.length){$('#handoff').hidden=true;$('#notice').textContent='先在第 12 步写一句这张图要表达的重点，再来找参考。标题和正文可以稍后再写。';return;}
+ let task=`请帮我查找真实存在的参考图，本次先给 2—3 个最贴合的候选，候选可供多张配图借鉴，不必每张都凑数量。
+请实际搜索并查看图片后再筛选，附可核实的原网页链接；能展示时直接展示候选图。无法查看图片或访问来源时明确说明，不能仅凭标题判断画面，也不要编造链接或用 AI 生图代替搜索结果。
+
+我正在做雅思领域的 AI 干货图文，风格真实、简洁、有生活感；普通手机、自然光、纸笔和日常桌面能实现，避免复杂布景和大量修图。
+账号内容：${value(0,'type')||'雅思 AI 干货'}
+目标读者：${value(0,'audience')||'正在备考雅思的人'}
+内容原则：${value(1,'principles')||'真实、简洁'}
+限制：${value(1,'limits')||'以图文为主'}
+标题类型：${value(8,'formula')||titleTypes[0]}
+标题：${value(8,'title')||'尚未定稿，不影响找参考'}
+真实卡点：${value(4,'scene')||'尚未填写'}
+一句话概述：${value(6,'summary')||'尚未填写'}
+
+本次找图范围：
+`;
+ ready.forEach(i=>{task+=`图 ${i+1} · ${photoNames[i]}：${value(11,'image'+i)}
+素材形式：${state.sources[i]==='AI截图'?'真实操作截图，参考信息组织和重点标注，不仿造界面':'日常实拍，参考构图、摆放和留白'}
+已有思路 / 借鉴点：${value(12,'borrow'+i)||'暂无'}
+已有来源：${value(12,'link'+i)||'暂无'}
+`;});
+ task+=`
+请先将内容重点转成具体可搜索的画面元素、构图和信息组织方式；允许借鉴其他主题的图，不局限雅思关键词。
+每个候选只说明三点：适合本篇哪张图、具体借鉴什么、用现有普通道具怎么实现。按表达目的是否匹配、画面是否简洁、我是否能复现筛选，并给出最推荐的一张及理由。参考的是构图与组织方式，实际内容和验证材料要用我自己的。
+
+交付真实候选和来源，不自动下载、上传或替我选定。选中的参考才放回工作台：可保存原网页链接，或手动放入 PNG / JPG / WebP 图片（每张不超过 12 MB），再留一句借鉴点。无需 A/B，不要求先写完正文。`;
+ showHandoff(task);
 }
 const dbPromise=new Promise((resolve,reject)=>{if(!window.indexedDB){reject(new Error('浏览器不支持素材保存'));return;}const req=indexedDB.open('ielts-workbench-assets',1);req.onupgradeneeded=()=>req.result.createObjectStore('images');req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error);});dbPromise.catch(()=>{});
 async function putAsset(id,blob){const db=await dbPromise;return new Promise((res,rej)=>{const tx=db.transaction('images','readwrite');tx.objectStore('images').put(blob,id);tx.oncomplete=res;tx.onerror=()=>rej(tx.error);});}
 async function getAsset(id){const db=await dbPromise;return new Promise((res,rej)=>{const r=db.transaction('images').objectStore('images').get(id);r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error);});}
 function renderPhotos(container,token){
- container.append(el('p',`引用 09：${value(8,'formula')||titleTypes[0]}\n标题：${value(8,'title')||'尚未填写'}`,'linked'));
- const styleBox=el('div');styleBox.append(el('h3','风格锚点确认'));anchors.forEach((a,i)=>styleBox.append(checkbox(a,state.style[i],v=>{state.style[i]=v;state.shots.fill(false);changed(12);render();},'anchor-'+i)));container.append(styleBox);
- container.append(el('p','拍摄参考 Skill 已接入任务整理。先写好标题和正文，再选封面试拍或整套；复制任务到 Codex 生成，回来放入图片。','muted'));
- const controls=el('div',undefined,'actions');const cover=button('先试封面 A/B（交给 Codex）',()=>requestPhotoTask([0],true));cover.id='photo-cover-task';const all=button('整套实拍参考任务（交给 Codex）',()=>requestPhotoTask(state.sources.map((s,i)=>s==='真人实拍'?i:-1).filter(i=>i>=0)));all.id='photo-all-task';controls.append(cover,all,button('去第 14 步写正文',()=>navigate(13)));container.append(controls);
-
- photoNames.forEach((n,i)=>{const card=el('section',undefined,'photo-card');card.append(el('h3',`图 ${i+1} · ${n}`),el('p','引用 12：'+(value(11,'image'+i)||'尚未填写'),'linked'));const l=el('label','素材来源');l.htmlFor='source-'+i;const sel=el('select');sel.id='source-'+i;['真人实拍','AI截图'].forEach(v=>{const o=el('option',v);o.value=v;sel.append(o);});sel.value=state.sources[i];sel.onchange=()=>{state.sources[i]=sel.value;state.shots[i]=false;changed(12);render();};card.append(l,sel);
- if(state.sources[i]==='真人实拍'){const a=advice(i);card.append(el('p','道具清单：'+a.props),el('p','摆放建议：'+a.arrangement),button('生成这张图的 A/B 参考任务（交给 Codex）',()=>requestPhotoTask([i])));const grid=el('div',undefined,'angles');['A','B'].forEach(angle=>{const box=el('div',undefined,'reference');box.append(el('p',`构图 ${angle}：${a[angle]}`));const img=el('img');img.alt=`图 ${i+1} 构图 ${angle} 的 AI 拍摄参考图`;img.hidden=true;box.append(img);const meta=state.references[i][angle];const status=el('p',meta?meta.name+' · '+(meta.signature===photoSignature(i)?'已放入参考图':'正文、重点或风格已变化，请重新生成'):'待生成参考图','muted');if(meta&&meta.signature!==photoSignature(i))status.classList.add('stale');box.append(status);
- if(meta)getAsset(meta.id).then(blob=>{if(token!==renderId)return;if(!blob){status.textContent='图片文件未找到，请重新选择';state.references[i][angle]=null;invalidate(12);save();updateChrome();return;}const url=URL.createObjectURL(blob);urls.push(url);img.src=url;img.hidden=false;}).catch(()=>{status.textContent='素材库不可用，请重新选择图片';});
- const lab=el('label','放入生成后的参考图 '+angle);const input=el('input');input.type='file';input.accept='image/png,image/jpeg,image/webp';input.id=`ref-${i}-${angle}`;lab.htmlFor=input.id;input.onchange=async()=>{const file=input.files[0];if(!file)return;if(!['image/png','image/jpeg','image/webp'].includes(file.type)||file.size>12*1024*1024){status.textContent='请选择 12 MB 以内的 PNG、JPG 或 WebP 图片';return;}const sig=photoSignature(i),owner=state;pendingUploads++;showSaved();try{const decoded=await createImageBitmap(file);decoded.close();const id=crypto.randomUUID();await putAsset(id,file);owner.references[i][angle]={id,name:file.name,signature:sig};owner.shots[i]=false;owner.done[12]=false;owner.working[12]=true;owner.done[15]=false;owner.savedAt=new Date().toISOString();if(owner===state){changed(12);if(state.step===12)render();}else persistLibrary();}catch{status.textContent='图片读取或保存失败，请重新选择';}finally{pendingUploads--;showSaved();}};box.append(lab,input);grid.append(box);});card.append(grid);}else card.append(el('p','直接截取真实 AI 操作过程或结果，保留关键输入与输出；这一张不生成仿造界面。','muted'));
- card.append(checkbox(state.sources[i]==='真人实拍'?'已实拍完成':'已截图完成',state.shots[i],v=>{state.shots[i]=v;changed(12);},'shot-'+i));container.append(card);
- });
+ selectedPhoto=Math.max(0,Math.min(4,Number(value(12,'activeImage'))||0));
+ container.append(el('p','先找看得懂、做得出来的画面。候选不用全存，选中再留下。','muted'));
+ const nav=el('div',undefined,'reference-tabs');nav.setAttribute('aria-label','选择要找参考的配图');
+ photoNames.forEach((n,i)=>{const b=button(`${String(i+1).padStart(2,'0')} ${n}${referenceReady(i)?' ✓':''}`,()=>selectReference(i));b.id='reference-tab-'+i;b.setAttribute('aria-pressed',String(selectedPhoto===i));nav.append(b);});container.append(nav);
+ const i=selectedPhoto,card=el('section',undefined,'photo-card');card.append(el('h3',`图 ${i+1} · ${photoNames[i]}`),el('p','这张要表达：'+(value(11,'image'+i)||'还没写，先去第 12 步留一句重点。'),'linked'));
+ const actions=el('div',undefined,'actions');const search=button('帮我找这张的参考',()=>requestReferenceTask([i]));search.id='reference-search';actions.append(search,button('去第 12 步调整重点',()=>navigate(11)));card.append(actions,el('p','按钮会整理找图任务，复制到 Codex 搜索。网页不会直接搜索或自动接收候选。','muted'));
+ const label=el('label','这张图怎么参考？');label.htmlFor='reference-mode';const mode=el('select');mode.id='reference-mode';
+ [['reference','放入选中的参考'],['own','已有思路，无需参考'],...photoNames.flatMap((n,j)=>j===i?[]:[[ 'shared:'+j,`沿用图 ${j+1} · ${n} 的参考`]])].forEach(([v,t])=>{const o=el('option',t);o.value=v;mode.append(o);});mode.value=referenceMode(i);mode.onchange=()=>{state.values[12]['mode'+i]=mode.value;changed(12);render();};card.append(label,mode);
+ function noteField(key,title,placeholder){const wrap=el('div',undefined,'field'),lab=el('label',title),input=el('textarea');input.id='reference-'+key;lab.htmlFor=input.id;input.rows=2;input.maxLength=20000;input.placeholder=placeholder;input.value=value(12,key+i);input.oninput=()=>{state.values[12][key+i]=input.value;changed(12);refreshReferenceStatus();};wrap.append(lab,input);return wrap;}
+ if(referenceMode(i)==='reference'){
+  const wrap=el('div',undefined,'field'),lab=el('label','原网页链接（与图片任选其一，也可都留）'),input=el('input'),link=el('a','打开来源 ↗'),warning=el('small');input.id='reference-link';input.type='url';input.placeholder='https://…';input.value=value(12,'link'+i);input.maxLength=4000;lab.htmlFor=input.id;link.target='_blank';link.rel='noopener noreferrer';link.id='reference-open-link';
+  const updateLink=()=>{const url=safeReferenceURL(input.value);link.hidden=!url;if(url)link.href=url;else link.removeAttribute('href');warning.textContent=input.value&&!url?'请填写完整的 http 或 https 网页链接。':'只存链接时，需要联网查看；图片存入工作台后可以离线查看。';};updateLink();input.oninput=()=>{state.values[12]['link'+i]=input.value;changed(12);updateLink();refreshReferenceStatus();};wrap.append(lab,input,warning,link);card.append(wrap);
+  const grid=el('div',undefined,'reference-images');
+  ['A','B'].filter(angle=>angle==='A'||state.references[i][angle]).forEach(angle=>{
+   const box=el('div',undefined,'reference'),meta=state.references[i][angle],status=el('p',meta?meta.name: '未放入图片；也可以只留上面的来源链接。','muted'),img=el('img');img.hidden=true;img.alt=`图 ${i+1} 选中的参考${angle==='B'?'（原 B 图）':''}`;box.append(img,status);
+   if(meta)getAsset(meta.id).then(blob=>{if(token!==renderId)return;if(!blob){status.textContent='图片文件未找到，请重新放入或改用来源链接。';return;}const url=URL.createObjectURL(blob);urls.push(url);img.src=url;img.hidden=false;}).catch(()=>{if(token===renderId)status.textContent='图片读取失败，请保留备份后重试。';});
+   const lab=el('label',angle==='B'?'原 B 参考图（保留，可替换）':meta?'更换选中的图片':'放入选中的图片'),input=el('input');input.type='file';input.accept='image/png,image/jpeg,image/webp';input.id=`ref-${i}-${angle}`;lab.htmlFor=input.id;
+   input.onchange=async()=>{const file=input.files[0];if(!file)return;if(!['image/png','image/jpeg','image/webp'].includes(file.type)||file.size>12*1024*1024){status.textContent='请选择 12 MB 以内的 PNG、JPG 或 WebP 图片；HEIC 请先转为 JPG。';input.value='';return;}const owner=state,sig=photoSignature(i);pendingUploads++;input.disabled=true;showSaved();try{const decoded=await createImageBitmap(file);decoded.close();const id=crypto.randomUUID();await putAsset(id,file);owner.references[i][angle]={id,name:file.name,signature:sig};if(owner===state){changed(12);if(state.step===12)render();}else{owner.done[12]=false;owner.working[12]=true;owner.done[15]=false;owner.review[14]=true;owner.savedAt=new Date().toISOString();persistLibrary();}}catch{status.textContent='图片读取或保存失败，请重新选择。';}finally{pendingUploads--;input.disabled=false;showSaved();}};box.append(lab,input);
+   if(meta){const remove=button('移除这张参考',()=>{delete state.references[i][angle];changed(12);render();});remove.id=`remove-ref-${i}-${angle}`;box.append(remove);}grid.append(box);
+  });card.append(grid,el('p','PNG / JPG / WebP，每张 ≤ 12 MB。放入本机浏览器，不会上传 GitHub。完整备份包含图片；Markdown 只包含文件名、链接和借鉴点。','muted'));
+  card.append(noteField('borrow','我准备借鉴什么？','例如：借鉴俯拍、左侧留白和标题位置；换成我的练习本与耳机。'));
+ }else if(referenceMode(i)==='own'){
+  card.append(el('p','不用为了完成这一步再找图。以前放入的参考仍会保留，切回即可查看。','muted'),noteField('borrow','准备怎么做？（选填）','留一句下次打开就能照着做的话。'));
+ }else{
+  const target=Number(referenceMode(i).slice(7));card.append(el('p',`沿用图 ${target+1} 的参考，不用重复上传。请在那张图中保存参考和借鉴点；不能循环沿用。`,'muted'));
+  card.append(button('查看这张参考 →',()=>selectReference(target)),noteField('borrow','这张想怎么调整？（选填）','例如：沿用桌面与光线，主体换成我的验证记录。'));
+ }
+ const status=el('p',undefined,'reference-status');status.id='reference-status';card.append(status);
+ function refreshReferenceStatus(){status.textContent=referenceReady(i)?'这张已有方向。可以继续下一张，实际拍摄和排版留到后面。':'先选好参考并写一句借鉴点；已有思路时可直接选择「无需参考」。';document.querySelectorAll('.reference-tabs button').forEach((b,j)=>b.textContent=`${String(j+1).padStart(2,'0')} ${photoNames[j]}${referenceReady(j)?' ✓':''}`);}
+ const more=el('details');more.append(el('summary','素材形式与旧记录'));const l=el('label','本篇准备使用的素材');l.htmlFor='source-'+i;const sel=el('select');sel.id='source-'+i;['真人实拍','AI截图'].forEach(v=>{const o=el('option',v);o.value=v;sel.append(o);});sel.value=state.sources[i];sel.onchange=()=>{state.sources[i]=sel.value;changed(12);};more.append(l,sel,el('p','过程图默认使用真实 AI 操作截图。参考图帮助安排画面，不替代自己的过程与证据。','muted'));if(state.shots[i])more.append(el('p','旧版记录：本图已标记拍摄 / 截图完成。'));if(state.style.some(Boolean))more.append(el('p','旧版风格确认：'+anchors.filter((_,j)=>state.style[j]).join('、')));card.append(more);
+ if(i<4)card.append(button('继续看图 '+(i+2)+' →',()=>selectReference(i+1)));container.append(card);refreshReferenceStatus();
 }
+
 function render(){
  renderId++;urls.forEach(URL.revokeObjectURL);urls=[];const token=renderId,i=state.step,s=steps[i];$('#post-name').value=state.name;$('#stage-number').textContent=`阶段${['一','二','三'][s.phase]} · ${String(i+1).padStart(2,'0')} / 16`;$('#stage-title').textContent=s.name;$('#action').textContent=s.action;$('#hint').textContent=s.hint;$('#resume-note').value=state.resume?.text||'';refreshResume();$('#step-blocker').textContent='常见卡点：'+minimumGuides[i][0];$('#step-minimum').textContent='最低完成标准：'+minimumGuides[i][1];$('#guidance').open=false;$('#handoff').hidden=true;$('#notice').textContent='';const area=$('#fields');area.replaceChildren();
  if(i===8){const wrap=el('div',undefined,'field'),l=el('label','标题公式类型');l.htmlFor='title-formula';const select=el('select');select.id='title-formula';titleTypes.forEach(x=>{const o=el('option',x);o.value=x;select.append(o);});select.value=value(8,'formula')||titleTypes[0];const example=el('p',titleExamples[titleTypes.indexOf(select.value)],'muted');select.onchange=()=>{state.values[8].formula=select.value;example.textContent=titleExamples[select.selectedIndex];changed(8);};wrap.append(l,select,example);area.append(wrap);}
@@ -211,7 +292,7 @@ function render(){
 function mdStep(i){const s=steps[i];let text=`## ${String(i+1).padStart(2,'0')} ${s.name}\n\n状态：${statusAt(i)}\n\n`;
  if(i===8)text+=`标题类型：${value(8,'formula')||titleTypes[0]}\n\n`;
  if(i===13)text+=`### 开头（引用 10）\n\n${value(9,'opening')||'未填写'}\n\n`;
- if(i===12){text+=`引用标题：${value(8,'title')||'未填写'}\n标题类型：${value(8,'formula')||titleTypes[0]}\n\n风格确认：\n${anchors.map((a,j)=>'- ['+(state.style[j]?'x':' ')+'] '+a).join('\n')}\n\n`;photoNames.forEach((n,j)=>{const a=advice(j);text+=`### 图 ${j+1} · ${n}\n\n重点（引用 12）：${value(11,'image'+j)||'未填写'}\n来源：${state.sources[j]}\n完成：${state.shots[j]?'是':'否'}\n\n`;if(state.sources[j]==='真人实拍'){text+=`道具：${a.props}\n摆放：${a.arrangement}\n构图 A：${a.A}\n构图 B：${a.B}\n`;['A','B'].forEach(k=>{const r=state.references[j][k];text+=`参考图 ${k}：${r?r.name+'（'+(r.signature===photoSignature(j)?'与当前内容一致':'需更新')+'）':'未放入'}\n`;});text+='\n';}});}
+ if(i===12){text+='参考图片本身包含在完整 JSON 备份中，Markdown 仅记录文件名、来源和借鉴点。\n\n';photoNames.forEach((n,j)=>{const mode=referenceMode(j);text+=`### 图 ${j+1} · ${n}\n\n重点（引用 12）：${value(11,'image'+j)||'未填写'}\n素材形式：${state.sources[j]}\n参考方式：${mode==='own'?'已有思路，无需参考':mode.startsWith('shared:')?'沿用图 '+(Number(mode.slice(7))+1)+' 的参考':'选中的参考'}\n方向：${referenceReady(j)?'已有方向':'待确定'}\n来源：${value(12,'link'+j)||'未填写'}\n借鉴点 / 实现思路：${value(12,'borrow'+j)||'未填写'}\n`;for(const angle of ['A','B']){const ref=state.references[j][angle];if(ref)text+=`参考图文件${angle==='B'?'（原 B 图）':''}：${ref.name}\n`;}if(state.shots[j])text+='旧版记录：已拍摄 / 截图完成\n';text+='\n';});}
  if(i===14)text+=rounds.map((r,j)=>'- ['+(state.revision[j]?'x':' ')+'] '+r).join('\n')+'\n\n';
  s.fields.forEach(f=>text+=`### ${f.label}${f.min?'（'+f.min+'—'+f.max+' 字）':''}\n\n${value(i,f.id)||'未填写'}\n\n`);return text;
 }
@@ -222,10 +303,10 @@ function download(text,name,type='text/markdown;charset=utf-8'){const url=URL.cr
 function showHandoff(text){handoff=text;$('#handoff-text').value=text;$('#handoff').hidden=false;$('#handoff').open=true;$('#notice').textContent='任务已整理好。复制到当前 Codex 对话执行。';$('#handoff').scrollIntoView({behavior:'smooth',block:'nearest'});}
 $('#post-name').oninput=e=>{state.name=e.target.value;save();};
 $('#complete').onclick=()=>{const e=errors(state.step);if(e.length){$('#notice').textContent=e.join('；');return;}state.done[state.step]=true;state.review[state.step]=false;state.working[state.step]=false;save();updateChrome();$('#notice').textContent='本板块已完成，可继续任意其他板块。';};
-$('#primary').onclick=()=>{const i=state.step;if(i===15){const e=errors(15);if(e.length){$('#notice').textContent=e.join('；');return;}download(markdown(),filename());state.done[15]=allReady();save();updateChrome();$('#notice').textContent=(allReady()?'成品':'草稿')+' Markdown 已生成并发起下载。';return;}if(completeAt(i)){navigate(i+1);return;}state.working[i]=true;save();updateChrome();if(i===12){const ids=state.sources.map((s,j)=>s==='真人实拍'?j:-1).filter(j=>j>=0);if(!ids.length){showHandoff('请依据以下清单检查五张真实 AI 截图所需内容：\n'+mdStep(11));return;}requestPhotoTask(ids);return;}let task='请继续我的雅思 AI 图文制作，仅处理第 '+(i+1)+' 步「'+steps[i].name+'」。\n'+steps[i].action+'\n'+steps[i].hint+'\n保留原方法，不合并板块，不虚构经历或效果。\n\n';task+='本篇允许多个板块并行推进。以下是所有板块的当前内容与状态；只处理本次指定板块，不以编号顺序推断其他板块为空。\n';for(let j=0;j<15;j++)task+=mdStep(j);showHandoff(task);};
+$('#primary').onclick=()=>{const i=state.step;if(i===15){const e=errors(15);if(e.length){$('#notice').textContent=e.join('；');return;}download(markdown(),filename());state.done[15]=allReady();save();updateChrome();$('#notice').textContent=(allReady()?'成品':'草稿')+' Markdown 已生成并发起下载。';return;}if(completeAt(i)){navigate(i+1);return;}state.working[i]=true;save();updateChrome();if(i===12){requestReferenceTask([selectedPhoto]);return;}let task='请继续我的雅思 AI 图文制作，仅处理第 '+(i+1)+' 步「'+steps[i].name+'」。\n'+steps[i].action+'\n'+steps[i].hint+'\n保留原方法，不合并板块，不虚构经历或效果。\n\n';task+='本篇允许多个板块并行推进。以下是所有板块的当前内容与状态；只处理本次指定板块，不以编号顺序推断其他板块为空。\n';for(let j=0;j<15;j++)task+=mdStep(j);showHandoff(task);};
 $('#copy-handoff').onclick=async()=>{try{await navigator.clipboard.writeText(handoff);$('#notice').textContent='任务已复制，可以粘贴到 Codex。';}catch{$('#handoff-text').focus();$('#handoff-text').select();$('#notice').textContent='已选中文字，请按 Command+C 复制。';}};
 $('#download-handoff').onclick=()=>download(handoff,date()+'-第'+(state.step+1)+'步-AI任务.md');
-window.addEventListener('beforeunload',e=>{if(storageError||pendingUploads){e.preventDefault();e.returnValue='';}});
+window.addEventListener('beforeunload',e=>{if(storageError||pendingUploads||libraryBusy){e.preventDefault();e.returnValue='';}});
 $('#resume-note').oninput=e=>{state.resume={text:e.target.value,step:state.step};save();refreshResume();};
 $('#resume-jump').onclick=()=>navigate(state.resume.step);
 $('#save-quick').onclick=captureQuickNote;
@@ -233,6 +314,8 @@ $('#cancel-quick').onclick=()=>{$('#quick-capture').open=false;$('#quick-status'
 $('#quick-capture').ontoggle=()=>{if($('#quick-capture').open)$('#quick-scene').focus();};
 $('#new-note').onclick=createNote;
 $('#note-picker').onchange=e=>switchNote(e.target.value);
+$('#choose-backup-directory').onclick=()=>libraryTask(chooseBackupDirectory);
+$('#clear-backup-directory').onclick=()=>libraryTask(clearBackupDirectory);
 $('#backup-all').onclick=()=>libraryTask(backupLibrary);
 $('#restore-backup').onclick=()=>$('#backup-file').click();
 $('#backup-file').onchange=e=>{const file=e.target.files[0];e.target.value='';libraryTask(()=>restoreLibrary(file));};
