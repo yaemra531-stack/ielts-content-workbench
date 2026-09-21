@@ -18,6 +18,19 @@ const url=require('node:url').pathToFileURL(require('node:path').join(__dirname,
  // Restore into a separate clean browser profile; existing blank note is preserved.
  const ctx2=await b.newContext(),r=await ctx2.newPage();await r.goto(url);await r.locator('#backup-file').setInputFiles(await dl.path());await r.waitForFunction(()=>library.notes.length===3);assert.match(await r.locator('#post-name').inputValue(),/旧笔记（恢复）/);assert.equal(await r.locator('#resume-note').inputValue(),'明天从第二个标题候选改');await r.locator('[data-step="12"]').click();await r.waitForFunction(()=>document.querySelector('.reference img').naturalWidth>0);assert.equal(await r.evaluate(async()=>dataURL(await getAsset(state.references[0].A.id))),originalImage);
  await r.locator('#backup-file').setInputFiles({name:'bad.json',mimeType:'application/json',buffer:Buffer.from('{"format":"bad"}')});await r.waitForFunction(()=>document.querySelector('#library-status').textContent.includes('不是有效'));assert.equal(await r.locator('#note-picker option').count(),3);
+ // Preserve the active note when it is not the first item; do not lose any imported fields.
+ await q.locator('#note-picker').selectOption(ids[1]);await q.locator('[data-step="14"]').click();await q.locator('#revision-0').check();await q.locator('[data-step="9"]').click();await q.locator('#field-9-opening').fill('还没有写完的开头，备份也应该保留');
+ const activeDownload=q.waitForEvent('download');await q.locator('#backup-all').click();const activeFile=await activeDownload;const activeBackup=JSON.parse(fs.readFileSync(await activeFile.path(),'utf8'));
+ assert.equal(activeBackup.library.activeId,ids[1]);assert.equal(activeBackup.library.notes[1].step,9);
+ const activeCtx=await b.newContext(),activePage=await activeCtx.newPage();await activePage.goto(url);
+ await activePage.locator('#backup-file').setInputFiles({name:'active-second.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(activeBackup))});
+ await activePage.waitForFunction(()=>library.notes.length===3);
+ assert.equal(await activePage.locator('#post-name').inputValue(),'第二篇（恢复）');
+ assert.deepEqual(await activePage.evaluate(()=>library.notes.slice(1).map(n=>n.values)),activeBackup.library.notes.map(n=>n.values));
+ assert.equal(await activePage.locator('#stage-title').innerText(),'开头');assert.equal(await activePage.locator('#field-9-opening').inputValue(),'还没有写完的开头，备份也应该保留');
+ const fields=['step','values','done','review','working','style','shots','revision','sources'];assert.deepEqual(await activePage.evaluate(keys=>Object.fromEntries(keys.map(k=>[k,state[k]])),fields),Object.fromEntries(fields.map(k=>[k,activeBackup.library.notes[1][k]])));
+ await activePage.reload();assert.equal(await activePage.locator('#post-name').inputValue(),'第二篇（恢复）');assert.equal(await activePage.locator('#stage-title').innerText(),'开头');
+ await activeCtx.close();
  // Quota failure is visible and cannot cause new-note navigation to discard unsaved edits.
  await r.evaluate(()=>{Storage.prototype.setItem=function(){throw new Error('QuotaExceededError')};});await r.locator('#post-name').fill('仍在内存的草稿');await r.locator('#new-note').click();assert.equal(await r.locator('#post-name').inputValue(),'仍在内存的草稿');assert.match(await r.locator('#save-state').innerText(),/保存未成功/);
  // Quick capture reuses ordinary drafts and must never overwrite an existing topic.

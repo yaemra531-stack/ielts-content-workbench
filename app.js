@@ -128,9 +128,9 @@ async function restoreLibrary(file){
  for(const asset of data.assets){if(typeof asset.id!=='string'||typeof asset.data!=='string'||!/^data:image\/(png|jpeg|webp);base64,/.test(asset.data)||assets.has(asset.id))throw Error('备份图片格式有误，原记录没有改变。');const blob=await (await fetch(asset.data)).blob();if(blob.size>12*1024*1024)throw Error('备份图片过大');const image=await createImageBitmap(blob);image.close();assets.set(asset.id,{id:crypto.randomUUID(),blob});}
  const notes=data.library.notes.map(n=>{const copy={...fresh(),...structuredClone(n),id:crypto.randomUUID(),name:n.name+'（恢复）'};for(const r of copy.references)for(const a of ['A','B'])if(r[a]){const asset=assets.get(r[a].id);if(!asset)throw Error('备份缺少参考图，原记录没有改变。');r[a].id=asset.id;}return copy;});
  for(const asset of assets.values())await putAsset(asset.id,asset.blob);
- const oldNotes=library.notes,oldState=state,oldActive=library.activeId;library.notes=[...library.notes,...notes];state=notes[0];library.activeId=state.id;
+ const oldNotes=library.notes,oldState=state,oldActive=library.activeId;library.notes=[...library.notes,...notes];const restoredIndex=data.library.notes.findIndex(n=>n.id===data.library.activeId);state=notes[restoredIndex>=0?restoredIndex:0];library.activeId=state.id;
  if(!persistLibrary()){library.notes=oldNotes;state=oldState;library.activeId=oldActive;return;}
- refreshLibrary();render();$('#library-status').textContent=`已恢复 ${notes.length} 篇笔记，作为独立副本加入；原有笔记均保留。`;
+ refreshLibrary();render();$('#library-status').textContent=`已恢复 ${notes.length} 篇笔记，作为独立副本加入；原有笔记均保留。当前打开「${state.name}」，其他笔记可在左上方“我的笔记”切换。`;
 }
 
 // Direct relationships, not a blanket reset of every subsequent block.
