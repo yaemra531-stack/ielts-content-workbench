@@ -22,39 +22,42 @@ const url=require('node:url').pathToFileURL(require('node:path').join(__dirname,
  // Reconfirm downstream after changing the overview.
  for(let i=7;i<12;i++){await go(i);if(await p.locator('#complete').isVisible())await p.locator('#complete').click();}
  await go(12);assert.equal(await p.locator('#stage-title').innerText(),'找参考与拍摄');
- assert.equal(await p.locator('.reference-flow button').count(),4);
- assert.equal(await p.locator('#anchor-0').count(),0);assert.equal(await p.locator('#shot-0').count(),0);assert.equal(await p.locator('#ref-0-B').count(),0);
- await p.locator('#reference-search').click();let task=await p.locator('#handoff-text').inputValue();assert.match(task,/实际搜索并查看图片/);assert.match(task,/秘密揭露型/);assert.match(task,/用真实材料说明field-11-image0/);assert.ok(!task.includes('$content-photo-reference'));
- assert.match(task,/完整笔记/);assert.match(task,/点赞、收藏/);assert.match(task,/采集日期/);assert.match(task,/关注人数要分开/);assert.match(task,/干货型、反精致、有活人感/);
- await p.locator('#reference-flow-1').click();await p.locator('#reference-focus').click();assert.match(await p.locator('#notice').innerText(),/先在「找参考」/);
- await p.locator('#reference-flow-0').click();await p.locator('#reference-candidates').fill('https://example.com/reference｜点赞数待核｜批注反映真实尝试');
- await p.locator('#reference-flow-1').click();await p.locator('#reference-focus').click();task=await p.locator('#handoff-text').inputValue();assert.match(task,/默认只交付一张首选/);assert.match(task,/借鉴重点/);assert.match(task,/下一步动作/);assert.match(task,/停止标准/);assert.match(task,/表现依据/);assert.match(task,/表达匹配/);assert.match(task,/风格匹配/);assert.match(task,/执行可行/);assert.match(task,/原样下载/);assert.match(task,/无需另建任务或额外 Agent/);assert.match(task,/用真实材料说明field-11-image0/);assert.ok(!task.includes('$content-photo-reference'));
+ assert.equal(await p.locator('.reference-flow button').count(),0);
+ assert.equal(await p.locator('#reference-records').getAttribute('open'),null);
+ assert.equal(await p.locator('#reference-generate').count(),0);
+ await p.locator('#reference-search').click();let task=await p.locator('#handoff-text').inputValue();
+ for(let i=0;i<5;i++)assert.ok(task.includes('用真实材料说明field-11-image'+i));
+ for(const text of ['秘密揭露型','本次只查本地','~/WorkBuddy/小红书参考库/','禁止自行联网','等待我另行明确授权','实际画面','适合用途','借鉴点','每一项已填写的配图需求，分别筛选 3—5 组','每张配图一页','每张配图推荐其中一组','不能把近似图片','全部 5 项需求','不用生成构图示意图'])assert.ok(task.includes(text),text);
+ assert.ok(!task.includes('整篇总计给 3—5 张'));
+ assert.match(await p.locator('#reference-batch').innerText(),/每张分别找 3—5 组不同参考/);
+ assert.match(await p.locator('#notice').innerText(),/Workbuddy/);
+ const handoffDownload=p.waitForEvent('download');await p.locator('#download-handoff').click();assert.equal(fs.readFileSync(await(await handoffDownload).path(),'utf8'),task);
+ await p.locator('#primary').click();assert.equal(await p.locator('#handoff-text').inputValue(),task);
  await p.locator('#complete').click();assert.match(await p.locator('#notice').innerText(),/借鉴点/);
+ await p.locator('#reference-records > summary').click();
+ await p.locator('#reference-tab-4').click();await p.locator('#reference-search').click();assert.equal(await p.locator('#handoff-text').inputValue(),task);await p.locator('#reference-tab-0').click();
  await p.locator('#reference-link').fill('javascript:alert(1)');assert.equal(await p.locator('#reference-open-link').isVisible(),false);
+ await p.locator('#reference-localRef').fill('XHS-012 · 图1');await p.locator('#reference-borrow').fill('借鉴俯拍和左侧留白，换成我的练习本');assert.equal(await p.evaluate(()=>referenceReady(0)),true);
  await p.locator('#reference-link').fill('https://example.com/reference');assert.equal(await p.locator('#reference-open-link').getAttribute('href'),'https://example.com/reference');
- await p.locator('#reference-borrow').fill('借鉴俯拍和左侧留白，换成我的练习本');assert.match(await p.locator('#reference-status').innerText(),/已有方向/);
- await p.locator('#ref-0-A').setInputFiles({name:'bad.heic',mimeType:'image/heic',buffer:Buffer.from('bad')});assert.match(await p.locator('.reference').innerText(),/HEIC/);
- await p.locator('#ref-0-A').setInputFiles({name:'large.png',mimeType:'image/png',buffer:Buffer.alloc(12*1024*1024+1)});assert.match(await p.locator('.reference').innerText(),/12 MB/);
+ await p.locator('#ref-0-A').setInputFiles({name:'bad.heic',mimeType:'image/heic',buffer:Buffer.from('bad')});assert.match(await p.locator('.reference').first().innerText(),/HEIC/);
+ await p.locator('#ref-0-A').setInputFiles({name:'large.png',mimeType:'image/png',buffer:Buffer.alloc(12*1024*1024+1)});assert.match(await p.locator('.reference').first().innerText(),/12 MB/);
  await p.locator('#ref-0-A').setInputFiles(require('node:path').join(__dirname,'assets/workbench-icon.png'));await p.locator('.reference img').first().waitFor({state:'visible'});
- // Existing A/B images and old shooting records remain intact, without forcing new B uploads.
- await p.evaluate(()=>{state.references[0].B={...state.references[0].A};state.shots[0]=true;state.style[0]=true;save();});await p.reload();await p.waitForFunction(()=>document.querySelectorAll('.reference img:not([hidden])').length===2);
+ // Seed historical slots exactly as an earlier version saved them; no new demo generation/upload UI.
+ await p.evaluate(async()=>{state.references[0].B={...state.references[0].A};const id=crypto.randomUUID();await putAsset(id,await getAsset(state.references[0].A.id));state.references[0].demo={id,name:'demo.png',signature:photoSignature(0)};state.values[12].flow0='3';state.values[12].comparison0='标题清楚，批注的使用感需要保留';state.values[12].candidates0='https://example.com/reference｜点赞数待核';state.shots[0]=true;state.style[0]=true;save();});await p.reload();
+ assert.equal(await p.locator('#ref-0-demo').count(),0);assert.equal(await p.locator('#remove-ref-0-demo').count(),0);
  assert.equal(await p.locator('#reference-borrow').inputValue(),'借鉴俯拍和左侧留白，换成我的练习本');
  const refDownload=p.waitForEvent('download');await p.locator('#download-ref-0-A').click();const refFile=await refDownload;assert.equal(refFile.suggestedFilename(),'workbench-icon.png');assert.deepEqual(fs.readFileSync(await refFile.path()),fs.readFileSync(require('node:path').join(__dirname,'assets/workbench-icon.png')));
- await p.locator('#reference-flow-2').click();await p.locator('#reference-compare').click();assert.match(await p.locator('#notice').innerText(),/先保留原参考图/);
- await p.locator('#reference-generate').click();task=await p.locator('#handoff-text').inputValue();assert.match(task,/实际生成一张/);assert.match(task,/必须保留什么/);assert.match(task,/文件名/);assert.match(task,/AI拍摄示意，非真实记录/);assert.match(task,/https:\/\/example.com\/reference/);
- const png=fs.readFileSync(require('node:path').join(__dirname,'assets/workbench-icon.png'));await p.locator('#ref-0-demo').setInputFiles({name:'demo.png',mimeType:'image/png',buffer:png});await p.waitForFunction(()=>!!state.references[0].demo);
- await p.locator('#reference-compare').click();assert.match(await p.locator('#handoff-text').inputValue(),/原样并排展示/);await p.locator('#reference-comparison').fill('标题清楚，批注的使用感需要保留');
- await p.locator('#reference-flow-3').click();assert.equal(await p.locator('#shot-0').isChecked(),true);await p.locator('#reference-plan').fill('自己的词汇书，窗边试拍一张');await p.locator('summary').filter({hasText:'放入自己的试拍'}).click();await p.locator('#ref-0-shot').setInputFiles({name:'shot.png',mimeType:'image/png',buffer:png});await p.waitForFunction(()=>!!state.references[0].shot);await p.reload();assert.equal(await p.locator('#reference-flow-3').getAttribute('aria-pressed'),'true');assert.equal(await p.locator('#reference-plan').inputValue(),'自己的词汇书，窗边试拍一张');
- await p.locator('#reference-tab-1').click();await p.locator('#reference-flow-1').click();await p.locator('#reference-mode').selectOption('shared:0');assert.match(await p.locator('#reference-status').innerText(),/已有方向/);await p.reload();assert.equal(await p.locator('#reference-tab-1').getAttribute('aria-pressed'),'true');assert.equal(await p.locator('#reference-mode').inputValue(),'shared:0');
- await p.locator('#reference-flow-2').click();await p.locator('#reference-generate').click();task=await p.locator('#handoff-text').inputValue();assert.match(task,/沿用图 1/);assert.match(task,/https:\/\/example.com\/reference/);assert.match(task,/借鉴俯拍和左侧留白/);
- await p.locator('#reference-tab-2').click();await p.locator('#reference-flow-2').click();await p.locator('#ref-2-demo').setInputFiles({name:'only-demo.png',mimeType:'image/png',buffer:png});await p.waitForFunction(()=>!!state.references[2].demo);assert.equal(await p.evaluate(()=>referenceReady(2)),false);
- await p.locator('#reference-flow-1').click();await p.locator('#reference-mode').selectOption('shared:1');assert.match(await p.locator('#reference-status').innerText(),/先选好参考/);await p.locator('#reference-mode').selectOption('own');await p.locator('#reference-flow-3').click();await p.locator('#reference-shoot').click();assert.match(await p.locator('#handoff-text').inputValue(),/过程页应截取真实操作/);assert.equal(await p.locator('#shot-2').isChecked(),false);
- for(let i=3;i<5;i++){await p.locator('#reference-tab-'+i).click();await p.locator('#reference-flow-1').click();await p.locator('#reference-mode').selectOption('own');}
+ await p.locator('#reference-shot > summary').click();assert.equal(await p.locator('#shot-0').isChecked(),true);await p.locator('#reference-plan').fill('自己的词汇书，窗边试拍一张');
+ const png=fs.readFileSync(require('node:path').join(__dirname,'assets/workbench-icon.png'));await p.locator('#ref-0-shot').setInputFiles({name:'shot.png',mimeType:'image/png',buffer:png});await p.waitForFunction(()=>!!state.references[0].shot);await p.reload();assert.equal(await p.locator('#reference-plan').inputValue(),'自己的词汇书，窗边试拍一张');
+ await p.locator('#reference-tab-1').click();await p.locator('#reference-mode').selectOption('shared:0');assert.match(await p.locator('#reference-status').innerText(),/已有方向/);await p.reload();assert.equal(await p.locator('#reference-mode').inputValue(),'shared:0');
+ await p.locator('#reference-tab-2').click();await p.evaluate(()=>{state.references[2].demo={...state.references[0].demo};save();});assert.equal(await p.evaluate(()=>referenceReady(2)),false);
+ await p.locator('#reference-mode').selectOption('shared:1');assert.match(await p.locator('#reference-status').innerText(),/连续沿用|先留一张/);await p.locator('#reference-mode').selectOption('own');
+ for(let i=3;i<5;i++){await p.locator('#reference-tab-'+i).click();await p.locator('#reference-mode').selectOption('own');}
+ await p.locator('summary').filter({hasText:'拍了几张，想请 Workbuddy'}).click();await p.locator('#reference-shoot').click();task=await p.locator('#handoff-text').inputValue();assert.match(task,/过程页应截取真实操作/);assert.match(task,/XHS-012/);assert.match(task,/文件名不会自动携带图片/);for(let i=0;i<5;i++)assert.ok(task.includes('用真实材料说明field-11-image'+i));
  await p.locator('#complete').click();assert.equal(await p.locator('#primary').innerText(),'已完成，进入下一步 →');
  await go(11);await p.locator('#field-11-image0').fill('新的困境重点');await p.locator('#complete').click();await go(12);assert.equal(await p.locator('#review-notice').isVisible(),true);
- await p.locator('#reference-tab-0').click();await p.locator('#reference-flow-1').click();assert.equal(await p.locator('#reference-borrow').inputValue(),'借鉴俯拍和左侧留白，换成我的练习本');await p.waitForFunction(()=>document.querySelectorAll('.reference img:not([hidden])').length===2);
- await p.locator('#reference-flow-2').click();await p.waitForFunction(()=>document.querySelectorAll('.reference img:not([hidden])').length===2);assert.equal(await p.locator('#reference-comparison').inputValue(),'标题清楚，批注的使用感需要保留');
- await p.screenshot({path:'/tmp/workbench-references-desktop.png',fullPage:true});await p.setViewportSize({width:390,height:1000});assert.equal(await p.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);await p.screenshot({path:'/tmp/workbench-references-mobile.png',fullPage:true});await p.setViewportSize({width:1200,height:1000});
+ await p.locator('#reference-tab-0').click();await p.locator('#reference-extra > summary').click();assert.equal(await p.locator('#reference-comparison').inputValue(),'标题清楚，批注的使用感需要保留');await p.waitForFunction(()=>document.querySelectorAll('.reference img:not([hidden])').length===4);
+ await p.locator('#reference-records > summary').click();await p.screenshot({path:'/tmp/workbench-references-desktop.png',fullPage:true});await p.setViewportSize({width:390,height:1000});assert.equal(await p.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);await p.screenshot({path:'/tmp/workbench-references-mobile.png',fullPage:true});await p.setViewportSize({width:1200,height:1000});
  await p.locator('#complete').click();
  await go(13);assert.equal(await p.locator('#field-9-opening').inputValue(),'真'.repeat(110));assert.equal(await p.locator('#field-9-opening').getAttribute('readonly'),'');
  const lengths={before:110,turn:90,middle:70,core:130,bridge:130,ending:50};for(const [key,n]of Object.entries(lengths))await p.locator('#field-13-'+key).fill('实'.repeat(n));
@@ -67,6 +70,10 @@ const url=require('node:url').pathToFileURL(require('node:path').join(__dirname,
  await p.reload();assert.equal(await p.locator('#count').innerText(),'16/16步已完成');
  await go(13);await p.setViewportSize({width:390,height:1100});assert.equal(await p.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);await p.screenshot({path:'/tmp/workbench16-mobile.png',fullPage:true});
  assert.deepEqual(errors,[]);
+ // Whole-post handoff does not invent missing needs or leak a different note's requirements.
+ const partialCtx=await browser.newContext(),partial=await partialCtx.newPage();await partial.goto(url);await partial.locator('[data-step="12"]').click();await partial.locator('#reference-search').click();assert.match(await partial.locator('#notice').innerText(),/至少一张/);assert.equal(await partial.locator('#handoff').isVisible(),false);
+ await partial.locator('[data-step="11"]').click();await partial.locator('#field-11-image1').fill('局部需求二');await partial.locator('#field-11-image4').fill('局部需求五');await partial.locator('[data-step="12"]').click();await partial.locator('#primary').click();const partialTask=await partial.locator('#handoff-text').inputValue();assert.match(partialTask,/全部 2 项需求/);assert.match(partialTask,/图 2 ·/);assert.match(partialTask,/图 5 ·/);assert.ok(!partialTask.includes('图 1 ·'));
+ await partial.locator('#new-note').click();await partial.locator('[data-step="12"]').click();await partial.locator('#primary').click();assert.equal(await partial.locator('#handoff').isVisible(),false);await partialCtx.close();
  // Old six-step text must remain recoverable without falsely marking new steps complete.
  const migration=await browser.newContext();const m=await migration.newPage();await m.goto(url);await m.evaluate(()=>{localStorage.removeItem('ielts-content-workbench-v3');localStorage.setItem('codex:visualization-widget-state-v2:'+JSON.stringify([location.pathname,location.search]),JSON.stringify({privateContent:{version:2,title:'旧笔记',notes:['原来的完整定位','','','','正文旧稿',''],checks:[],stage:4}}));});await m.reload();assert.equal(await m.locator('#post-name').inputValue(),'旧笔记');assert.match(await m.locator('#legacy-text').textContent(),/正文旧稿/);assert.equal(await m.locator('#count').innerText(),'0/16步已完成');
  await browser.close();console.log('PASS: 16 blocks, validation, button transition, dependency links, reference search handoff, link/image/own/shared modes, legacy A/B preservation, upload limits, persistence/review, 15-section Markdown filename/download, reload, mobile, legacy preservation.');
