@@ -94,7 +94,7 @@ Skill 是给 Codex 的工作指引。这里列出的 Skill 不随网页加载，
 | Playwright 1.62.1 | 在隔离浏览器检查保存、流程和图片 | 开发测试依赖；Apache-2.0，版本与许可已从安装包核验；[项目仓库](https://github.com/microsoft/playwright) |
 | Node.js 与 npm | 安装测试依赖、执行维护命令 | 开发环境，日常打开网页不需要；[Node.js](https://nodejs.org/)、[npm CLI](https://github.com/npm/cli) |
 | Git | 保存代码历史、提交改动 | 版本管理工具；[官方网站](https://git-scm.com/) |
-| GitHub 与 GitHub Actions | 私有代码托管、上传后自动检查 | 托管服务，不把服务本身列为开源依赖；当前未开启 Pages |
+| GitHub 与 GitHub Actions | 公开代码托管、上传后自动检查 | 托管服务，不把服务本身列为开源依赖；当前未开启 Pages |
 | Codex | 修改程序、整理 AI 任务、协助内容创作 | 外部服务，不内置在工作台，也不由页面自动调用 |
 
 新加工具时，只有实际参与过本项目才放进这张表；候选留在待办。若分发第三方源码或素材，再核对其授权和署名要求。
@@ -106,7 +106,9 @@ Skill 是给 Codex 的工作指引。这里列出的 Skill 不随网页加载，
 - [GitHub Issues / Projects](https://docs.github.com/en/issues/planning-and-tracking-with-projects/learning-about-projects/about-projects) 能把待办呈现为表格、看板和路线图。将来多人参与或待办明显变多时，再迁移过去。迁移后以那里为准，避免两边重复维护状态。
 - [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 提倡为人整理重要变更。我们借用“待发布 / 已发布”的区分，不直接拿 Git 提交列表替代使用者能读懂的更新说明。
 
-当前不嵌入远程看板，也不为此增加工作台必填项。本页可以离线阅读，随本轮代码一并纳入私有仓库。
+当前不嵌入远程看板，也不为此增加工作台必填项。本页可以离线阅读；相关代码当时纳入私有仓库，仓库于 2026-09-25 改为公开。
+
+2026-09-25，用户在获知 Git 历史中的提交邮箱会随仓库公开后，明确同意直接公开当前仓库。改动仅涉及 GitHub 仓库可见性和相应说明；本地浏览器中的笔记、备份与参考图仍按原方式保存，未部署 GitHub Pages。
 
 ## 2026-09-21 · 恢复备份后看起来内容缺失
 
